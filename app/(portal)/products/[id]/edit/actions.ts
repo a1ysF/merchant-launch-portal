@@ -2,19 +2,20 @@
 
 import { redirect } from "next/navigation";
 
+import type { ProductFormState } from "@/components/products/product-form";
 import {
-  createProduct,
   parseProductFormData,
+  updateProduct,
   validateProductInput,
 } from "@/lib/products";
-import type { ProductFormState } from "@/components/products/product-form";
 
-export type CreateProductFormState = ProductFormState;
+export type UpdateProductFormState = ProductFormState;
 
-export async function createProductAction(
-  _prevState: CreateProductFormState | null,
+export async function updateProductAction(
+  productId: string,
+  _prevState: UpdateProductFormState | null,
   formData: FormData
-): Promise<CreateProductFormState | null> {
+): Promise<UpdateProductFormState | null> {
   const validation = validateProductInput(parseProductFormData(formData));
   if (!validation.ok) {
     return {
@@ -24,15 +25,15 @@ export async function createProductAction(
   }
 
   try {
-    await createProduct(validation.data);
+    await updateProduct(productId, validation.data);
   } catch (error) {
     return {
       error:
         error instanceof Error
           ? error.message
-          : "Failed to create product. Please try again.",
+          : "Failed to update product. Please try again.",
     };
   }
 
-  redirect("/products");
+  redirect(`/products/${productId}`);
 }

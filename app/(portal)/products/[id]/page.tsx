@@ -76,9 +76,14 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
         title={product.title}
         description={`${product.gameTitle} · ${product.sku}`}
         actions={
-          <Button variant="outline" asChild>
-            <Link href="/products">Back to catalog</Link>
-          </Button>
+          <>
+            <Button variant="outline" asChild>
+              <Link href={`/products/${id}/edit`}>Edit product</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/products">Back to catalog</Link>
+            </Button>
+          </>
         }
       />
 

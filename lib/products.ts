@@ -88,7 +88,7 @@ function queryError(action: string, message: string): Error {
   return new Error(`Failed to ${action}: ${message}`);
 }
 
-function formatInsertError(message: string): string {
+function formatPolicyError(message: string, operation: "insert" | "update"): string {
   const lower = message.toLowerCase();
   if (
     lower.includes("row-level security") ||
@@ -96,13 +96,17 @@ function formatInsertError(message: string): string {
     lower.includes("permission denied") ||
     lower.includes("42501")
   ) {
-    return `${message} You may need a temporary INSERT policy on the products table for anon until authentication is added.`;
+    const policy =
+      operation === "insert"
+        ? "INSERT policy on the products table for anon"
+        : "UPDATE policy on the products table for anon";
+    return `${message} You may need a temporary ${policy} until authentication is added.`;
   }
   return message;
 }
 
-/** Input for creating a product (camelCase, frontend shape). */
-export type CreateProductInput = {
+/** Shared product form input (camelCase, frontend shape). */
+export type ProductFormInput = {
   gameTitle: string;
   title: string;
   sku: string;
@@ -115,9 +119,33 @@ export type CreateProductInput = {
   supportEmail?: string;
 };
 
-export type CreateProductValidationResult =
-  | { ok: true; data: CreateProductInput }
+/** @alias ProductFormInput */
+export type CreateProductInput = ProductFormInput;
+
+/** @alias ProductFormInput */
+export type UpdateProductInput = ProductFormInput;
+
+export type ProductFormValidationResult =
+  | { ok: true; data: ProductFormInput }
   | { ok: false; error: string; fieldErrors: Record<string, string> };
+
+/** @alias ProductFormValidationResult */
+export type CreateProductValidationResult = ProductFormValidationResult;
+
+export function parseProductFormData(formData: FormData): Record<string, string> {
+  return {
+    gameTitle: String(formData.get("gameTitle") ?? ""),
+    title: String(formData.get("title") ?? ""),
+    sku: String(formData.get("sku") ?? ""),
+    productType: String(formData.get("productType") ?? ""),
+    price: String(formData.get("price") ?? ""),
+    currency: String(formData.get("currency") ?? ""),
+    region: String(formData.get("region") ?? ""),
+    status: String(formData.get("status") ?? ""),
+    webhookUrl: String(formData.get("webhookUrl") ?? ""),
+    supportEmail: String(formData.get("supportEmail") ?? ""),
+  };
+}
 
 export function calculateReadinessScore(input: {
   webhookUrl?: string;
@@ -131,9 +159,9 @@ export function calculateReadinessScore(input: {
   return Math.max(0, score);
 }
 
-export function validateCreateProductInput(
+export function validateProductInput(
   raw: Record<string, string>
-): CreateProductValidationResult {
+): ProductFormValidationResult {
   const fieldErrors: Record<string, string> = {};
 
   const gameTitle = raw.gameTitle?.trim() ?? "";
@@ -196,7 +224,10 @@ export function validateCreateProductInput(
   };
 }
 
-function mapCreateInputToDb(input: CreateProductInput) {
+/** @alias validateProductInput */
+export const validateCreateProductInput = validateProductInput;
+
+function mapProductInputToDb(input: ProductFormInput) {
   const readinessScore = calculateReadinessScore(input);
 
   return {
@@ -216,7 +247,7 @@ function mapCreateInputToDb(input: CreateProductInput) {
 
 export async function createProduct(input: CreateProductInput): Promise<Product> {
   const supabase = await createClient();
-  const row = mapCreateInputToDb(input);
+  const row = mapProductInputToDb(input);
 
   const { data, error } = await supabase
     .from("products")
@@ -225,7 +256,28 @@ export async function createProduct(input: CreateProductInput): Promise<Product>
     .single();
 
   if (error) {
-    throw queryError("create product", formatInsertError(error.message));
+    throw queryError("create product", formatPolicyError(error.message, "insert"));
+  }
+
+  return mapProductRow(data as DbProduct);
+}
+
+export async function updateProduct(
+  id: string,
+  input: UpdateProductInput
+): Promise<Product> {
+  const supabase = await createClient();
+  const row = mapProductInputToDb(input);
+
+  const { data, error } = await supabase
+    .from("products")
+    .update(row)
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw queryError("update product", formatPolicyError(error.message, "update"));
   }
 
   return mapProductRow(data as DbProduct);
