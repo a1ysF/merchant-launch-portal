@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { ProductIssuesList } from "@/components/products/product-issues-list";
+import { ProductsLoadError } from "@/components/products/products-load-error";
 import { ProductStatusBadge } from "@/components/products/product-status-badge";
 import { ProductTypeBadge } from "@/components/products/product-type-badge";
 import { ReadinessProgress } from "@/components/products/readiness-progress";
@@ -15,7 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getProductById } from "@/lib/demo-products";
+import { getProductById, getProductIssues } from "@/lib/products";
 import { formatProductPrice } from "@/types/product";
 
 type ProductDetailPageProps = {
@@ -31,7 +32,39 @@ function formatDate(iso: string): string {
 
 export default async function ProductDetailPage({ params }: ProductDetailPageProps) {
   const { id } = await params;
-  const product = getProductById(id);
+
+  let product;
+  let loadError: string | null = null;
+
+  try {
+    product = await getProductById(id);
+
+    if (product) {
+      const issues = await getProductIssues(id);
+      product = { ...product, issues };
+    }
+  } catch (error) {
+    loadError =
+      error instanceof Error ? error.message : "An unexpected error occurred.";
+    product = null;
+  }
+
+  if (loadError) {
+    return (
+      <>
+        <PageHeader
+          title="Product"
+          description="Unable to load product details."
+          actions={
+            <Button variant="outline" asChild>
+              <Link href="/products">Back to catalog</Link>
+            </Button>
+          }
+        />
+        <ProductsLoadError message={loadError} />
+      </>
+    );
+  }
 
   if (!product) {
     notFound();

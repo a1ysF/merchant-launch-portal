@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 
 import { ProductsCatalog } from "@/components/products/products-catalog";
+import { ProductsLoadError } from "@/components/products/products-load-error";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,10 +12,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getAllProducts } from "@/lib/demo-products";
+import { getProducts } from "@/lib/products";
+import type { Product } from "@/types/product";
 
-export default function ProductsPage() {
-  const products = getAllProducts();
+export default async function ProductsPage() {
+  let products: Product[] = [];
+  let loadError: string | null = null;
+
+  try {
+    products = await getProducts();
+  } catch (error) {
+    loadError =
+      error instanceof Error ? error.message : "An unexpected error occurred.";
+  }
 
   return (
     <>
@@ -35,11 +45,12 @@ export default function ProductsPage() {
         <CardHeader>
           <CardTitle>Catalog</CardTitle>
           <CardDescription>
-            Demo data in-memory — Supabase persistence will be added in a later phase.
+            Product data loaded from Supabase. Writes will be added in a later phase.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <ProductsCatalog products={products} />
+        <CardContent className="space-y-4">
+          {loadError ? <ProductsLoadError message={loadError} /> : null}
+          {!loadError ? <ProductsCatalog products={products} /> : null}
         </CardContent>
       </Card>
     </>

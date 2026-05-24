@@ -13,7 +13,7 @@ export default function ProductNotFound() {
     <div className="flex flex-col items-start gap-4 py-12">
       <h1 className="text-2xl font-semibold">Product not found</h1>
       <p className="text-sm text-muted-foreground">
-        No demo product exists for this ID. Try: {sampleIds}, or browse the catalog.
+        No product exists for this ID in Supabase. Sample demo IDs (reference): {sampleIds}. Browse the catalog for live rows.
       </p>
       <Button asChild>
         <Link href="/products">Back to products</Link>
