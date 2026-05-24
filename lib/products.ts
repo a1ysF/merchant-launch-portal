@@ -88,6 +88,149 @@ function queryError(action: string, message: string): Error {
   return new Error(`Failed to ${action}: ${message}`);
 }
 
+function formatInsertError(message: string): string {
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("row-level security") ||
+    lower.includes("policy") ||
+    lower.includes("permission denied") ||
+    lower.includes("42501")
+  ) {
+    return `${message} You may need a temporary INSERT policy on the products table for anon until authentication is added.`;
+  }
+  return message;
+}
+
+/** Input for creating a product (camelCase, frontend shape). */
+export type CreateProductInput = {
+  gameTitle: string;
+  title: string;
+  sku: string;
+  productType: ProductType;
+  price: number;
+  currency: string;
+  region: string;
+  status: ProductStatus;
+  webhookUrl?: string;
+  supportEmail?: string;
+};
+
+export type CreateProductValidationResult =
+  | { ok: true; data: CreateProductInput }
+  | { ok: false; error: string; fieldErrors: Record<string, string> };
+
+export function calculateReadinessScore(input: {
+  webhookUrl?: string;
+  supportEmail?: string;
+  status: ProductStatus;
+}): number {
+  let score = 100;
+  if (!input.webhookUrl?.trim()) score -= 25;
+  if (!input.supportEmail?.trim()) score -= 25;
+  if (input.status === "draft") score -= 20;
+  return Math.max(0, score);
+}
+
+export function validateCreateProductInput(
+  raw: Record<string, string>
+): CreateProductValidationResult {
+  const fieldErrors: Record<string, string> = {};
+
+  const gameTitle = raw.gameTitle?.trim() ?? "";
+  const title = raw.title?.trim() ?? "";
+  const sku = raw.sku?.trim() ?? "";
+  const productType = raw.productType?.trim() ?? "";
+  const currency = raw.currency?.trim() ?? "";
+  const region = raw.region?.trim() ?? "";
+  const status = raw.status?.trim() ?? "";
+  const webhookUrl = raw.webhookUrl?.trim() ?? "";
+  const supportEmail = raw.supportEmail?.trim() ?? "";
+
+  if (!gameTitle) fieldErrors.gameTitle = "Game title is required.";
+  if (!title) fieldErrors.title = "Product name is required.";
+  if (!sku) fieldErrors.sku = "SKU is required.";
+  if (!productType) fieldErrors.productType = "Product type is required.";
+  if (!currency) fieldErrors.currency = "Currency is required.";
+  if (!region) fieldErrors.region = "Region is required.";
+  if (!status) fieldErrors.status = "Status is required.";
+
+  if (productType && !PRODUCT_TYPES.includes(productType as ProductType)) {
+    fieldErrors.productType = "Invalid product type.";
+  }
+  if (status && !PRODUCT_STATUSES.includes(status as ProductStatus)) {
+    fieldErrors.status = "Invalid status.";
+  }
+
+  const priceRaw = raw.price?.trim() ?? "";
+  if (!priceRaw) {
+    fieldErrors.price = "Price is required.";
+  }
+
+  const price = priceRaw ? Number(priceRaw) : NaN;
+  if (priceRaw && (Number.isNaN(price) || price <= 0)) {
+    fieldErrors.price = "Price must be greater than 0.";
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return {
+      ok: false,
+      error: "Please fix the errors below.",
+      fieldErrors,
+    };
+  }
+
+  return {
+    ok: true,
+    data: {
+      gameTitle,
+      title,
+      sku,
+      productType: productType as ProductType,
+      price,
+      currency,
+      region,
+      status: status as ProductStatus,
+      webhookUrl: webhookUrl || undefined,
+      supportEmail: supportEmail || undefined,
+    },
+  };
+}
+
+function mapCreateInputToDb(input: CreateProductInput) {
+  const readinessScore = calculateReadinessScore(input);
+
+  return {
+    title: input.title,
+    game_title: input.gameTitle,
+    sku: input.sku,
+    product_type: input.productType,
+    price: input.price,
+    currency: input.currency,
+    status: input.status,
+    region: input.region,
+    webhook_url: input.webhookUrl?.trim() || null,
+    support_email: input.supportEmail?.trim() || null,
+    readiness_score: readinessScore,
+  };
+}
+
+export async function createProduct(input: CreateProductInput): Promise<Product> {
+  const supabase = await createClient();
+  const row = mapCreateInputToDb(input);
+
+  const { data, error } = await supabase
+    .from("products")
+    .insert(row)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw queryError("create product", formatInsertError(error.message));
+  }
+
+  return mapProductRow(data as DbProduct);
+}
+
 export async function getProducts(): Promise<Product[]> {
   const supabase = await createClient();
 

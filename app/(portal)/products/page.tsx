@@ -49,7 +49,9 @@ export default async function ProductsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {loadError ? <ProductsLoadError message={loadError} /> : null}
+          {loadError ? (
+            <ProductsLoadError title="Could not load products" message={loadError} />
+          ) : null}
           {!loadError ? <ProductsCatalog products={products} /> : null}
         </CardContent>
       </Card>

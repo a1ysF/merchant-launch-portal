@@ -1,6 +1,13 @@
-import Link from "next/link";
+"use client";
 
-import { ProductStatusBadge } from "@/components/products/product-status-badge";
+import Link from "next/link";
+import { useActionState, useState } from "react";
+
+import {
+  createProductAction,
+  type CreateProductFormState,
+} from "@/app/(portal)/products/new/actions";
+import { ProductsLoadError } from "@/components/products/products-load-error";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,131 +31,222 @@ import {
   PRODUCT_STATUS_LABELS,
   PRODUCT_TYPES,
 } from "@/types/product";
+import { cn } from "@/lib/utils";
 
 const currencies = ["USD", "EUR", "GBP"] as const;
 const regions = ["Global", "NA", "EU", "APAC", "LATAM", "UK", "NA / EU"] as const;
 
+const initialState: CreateProductFormState | null = null;
+
+function fieldError(
+  fieldErrors: Record<string, string> | undefined,
+  name: string
+): string | undefined {
+  return fieldErrors?.[name];
+}
+
 export function NewProductForm() {
+  const [state, formAction, isPending] = useActionState(
+    createProductAction,
+    initialState
+  );
+  const [productType, setProductType] = useState("");
+  const [status, setStatus] = useState("draft");
+  const [currency, setCurrency] = useState("USD");
+  const [region, setRegion] = useState("");
+
   return (
     <Card className="max-w-3xl">
       <CardHeader>
         <CardTitle>Product details</CardTitle>
         <CardDescription>
-          Fill in launch metadata for a new SKU. Saving is disabled until the backend is connected.
+          Create a new SKU in Supabase. Readiness score is calculated automatically.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="gameTitle">Game title</Label>
-            <Input id="gameTitle" placeholder="e.g. Shadow Realm Online" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="title">Product name</Label>
-            <Input id="title" placeholder="e.g. Starter Crystal Pack" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="sku">SKU</Label>
-            <Input id="sku" placeholder="e.g. SRO-CRY-ST01" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="productType">Product type</Label>
-            <Select>
-              <SelectTrigger id="productType" className="w-full">
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                {PRODUCT_TYPES.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="status">Status</Label>
-            <Select defaultValue="draft">
-              <SelectTrigger id="status" className="w-full">
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                {PRODUCT_STATUSES.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {PRODUCT_STATUS_LABELS[status]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="price">Price</Label>
-            <Input id="price" type="number" min="0" step="0.01" placeholder="9.99" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="currency">Currency</Label>
-            <Select defaultValue="USD">
-              <SelectTrigger id="currency" className="w-full">
-                <SelectValue placeholder="Select currency" />
-              </SelectTrigger>
-              <SelectContent>
-                {currencies.map((currency) => (
-                  <SelectItem key={currency} value={currency}>
-                    {currency}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="region">Region</Label>
-            <Select>
-              <SelectTrigger id="region" className="w-full">
-                <SelectValue placeholder="Select region" />
-              </SelectTrigger>
-              <SelectContent>
-                {regions.map((region) => (
-                  <SelectItem key={region} value={region}>
-                    {region}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="webhookUrl">Webhook URL</Label>
-            <Input
-              id="webhookUrl"
-              type="url"
-              placeholder="https://hooks.demo.merchant/your-game/events"
-            />
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="supportEmail">Support email</Label>
-            <Input
-              id="supportEmail"
-              type="email"
-              placeholder="commerce@yourgame-demo.io"
-            />
-          </div>
-        </div>
+      <form action={formAction}>
+        <CardContent className="space-y-6">
+          {state?.error ? (
+            <ProductsLoadError title="Could not create product" message={state.error} />
+          ) : null}
 
-        <p className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-          Backend connection coming later — this form is for layout and field planning only.
-        </p>
-      </CardContent>
-      <CardFooter className="flex flex-wrap gap-2 border-t">
-        <Button type="button" disabled title="Requires Supabase in a future phase">
-          Create product
-        </Button>
-        <Button variant="outline" asChild>
-          <Link href="/products">Cancel</Link>
-        </Button>
-        <div className="flex w-full items-center gap-2 pt-2 sm:w-auto sm:pt-0 sm:pl-2">
-          <span className="text-xs text-muted-foreground">Preview status:</span>
-          <ProductStatusBadge status="draft" />
-        </div>
-      </CardFooter>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="gameTitle">Game title</Label>
+              <Input
+                id="gameTitle"
+                name="gameTitle"
+                placeholder="e.g. Shadow Realm Online"
+                required
+                aria-invalid={Boolean(fieldError(state?.fieldErrors, "gameTitle"))}
+              />
+              <FieldMessage message={fieldError(state?.fieldErrors, "gameTitle")} />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="title">Product name</Label>
+              <Input
+                id="title"
+                name="title"
+                placeholder="e.g. Starter Crystal Pack"
+                required
+                aria-invalid={Boolean(fieldError(state?.fieldErrors, "title"))}
+              />
+              <FieldMessage message={fieldError(state?.fieldErrors, "title")} />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="sku">SKU</Label>
+              <Input
+                id="sku"
+                name="sku"
+                placeholder="e.g. SRO-CRY-ST01"
+                required
+                aria-invalid={Boolean(fieldError(state?.fieldErrors, "sku"))}
+              />
+              <FieldMessage message={fieldError(state?.fieldErrors, "sku")} />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="productType">Product type</Label>
+              <input type="hidden" name="productType" value={productType} />
+              <Select
+                value={productType || undefined}
+                onValueChange={setProductType}
+              >
+                <SelectTrigger
+                  id="productType"
+                  className="w-full"
+                  aria-invalid={Boolean(fieldError(state?.fieldErrors, "productType"))}
+                >
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRODUCT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldMessage message={fieldError(state?.fieldErrors, "productType")} />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="status">Status</Label>
+              <input type="hidden" name="status" value={status} />
+              <Select value={status} onValueChange={setStatus} required>
+                <SelectTrigger
+                  id="status"
+                  className="w-full"
+                  aria-invalid={Boolean(fieldError(state?.fieldErrors, "status"))}
+                >
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRODUCT_STATUSES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {PRODUCT_STATUS_LABELS[status]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldMessage message={fieldError(state?.fieldErrors, "status")} />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="price">Price</Label>
+              <Input
+                id="price"
+                name="price"
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="9.99"
+                required
+                aria-invalid={Boolean(fieldError(state?.fieldErrors, "price"))}
+              />
+              <FieldMessage message={fieldError(state?.fieldErrors, "price")} />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="currency">Currency</Label>
+              <input type="hidden" name="currency" value={currency} />
+              <Select value={currency} onValueChange={setCurrency} required>
+                <SelectTrigger
+                  id="currency"
+                  className="w-full"
+                  aria-invalid={Boolean(fieldError(state?.fieldErrors, "currency"))}
+                >
+                  <SelectValue placeholder="Select currency" />
+                </SelectTrigger>
+                <SelectContent>
+                  {currencies.map((currency) => (
+                    <SelectItem key={currency} value={currency}>
+                      {currency}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldMessage message={fieldError(state?.fieldErrors, "currency")} />
+            </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="region">Region</Label>
+              <input type="hidden" name="region" value={region} />
+              <Select value={region || undefined} onValueChange={setRegion}>
+                <SelectTrigger
+                  id="region"
+                  className="w-full"
+                  aria-invalid={Boolean(fieldError(state?.fieldErrors, "region"))}
+                >
+                  <SelectValue placeholder="Select region" />
+                </SelectTrigger>
+                <SelectContent>
+                  {regions.map((region) => (
+                    <SelectItem key={region} value={region}>
+                      {region}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldMessage message={fieldError(state?.fieldErrors, "region")} />
+            </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="webhookUrl">Webhook URL (optional)</Label>
+              <Input
+                id="webhookUrl"
+                name="webhookUrl"
+                type="url"
+                placeholder="https://hooks.demo.merchant/your-game/events"
+              />
+            </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="supportEmail">Support email (optional)</Label>
+              <Input
+                id="supportEmail"
+                name="supportEmail"
+                type="email"
+                placeholder="commerce@yourgame-demo.io"
+              />
+            </div>
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-wrap gap-2 border-t">
+          <Button type="submit" disabled={isPending}>
+            {isPending ? "Creating…" : "Create product"}
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/products">Cancel</Link>
+          </Button>
+        </CardFooter>
+      </form>
     </Card>
   );
+}
+
+function FieldMessage({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className={cn("text-xs text-destructive")}>{message}</p>;
 }
