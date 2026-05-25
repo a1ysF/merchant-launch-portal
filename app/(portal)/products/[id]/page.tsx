@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Pencil, Webhook } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { ProductIssuesList } from "@/components/products/product-issues-list";
@@ -77,8 +78,11 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
         description={`${product.gameTitle} · ${product.sku}`}
         actions={
           <>
-            <Button variant="outline" asChild>
-              <Link href={`/products/${id}/edit`}>Edit product</Link>
+            <Button asChild>
+              <Link href={`/products/${id}/edit`}>
+                <Pencil data-icon="inline-start" />
+                Edit product
+              </Link>
             </Button>
             <Button variant="outline" asChild>
               <Link href="/products">Back to catalog</Link>
@@ -198,29 +202,32 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
                 Webhook and support contacts for merchant launch workflows.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4 text-sm">
+            <CardContent className="space-y-5 text-sm">
               <div className="space-y-1">
                 <p className="text-muted-foreground">Webhook URL</p>
                 {product.webhookUrl ? (
-                  <p className="break-all font-mono text-xs">{product.webhookUrl}</p>
+                  <p className="break-all rounded-lg border border-border/60 bg-muted/30 px-3 py-2 font-mono text-xs">
+                    {product.webhookUrl}
+                  </p>
                 ) : (
                   <p className="text-amber-400">Not configured</p>
                 )}
               </div>
               <div className="space-y-1">
                 <p className="text-muted-foreground">Support email</p>
-                <p>{product.supportEmail}</p>
+                <p>{product.supportEmail || "—"}</p>
               </div>
-              <p className="text-muted-foreground">
-                Test callbacks in the{" "}
-                <Link
-                  href="/webhook-tester"
-                  className="text-primary underline-offset-4 hover:underline"
-                >
-                  Webhook Tester
-                </Link>{" "}
-                (simulation only — no live requests).
-              </p>
+              <div className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-4">
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/webhook-tester?productId=${product.id}`}>
+                    <Webhook data-icon="inline-start" />
+                    Test webhook
+                  </Link>
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Simulated delivery only — no live HTTP requests.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

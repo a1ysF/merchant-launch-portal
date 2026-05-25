@@ -38,7 +38,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
 
       <div className="flex min-h-screen flex-1 flex-col md:pl-64">
         <Header onMenuClick={() => setMobileOpen(true)} />
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="flex-1 p-5 md:p-8">{children}</main>
       </div>
     </div>
   );

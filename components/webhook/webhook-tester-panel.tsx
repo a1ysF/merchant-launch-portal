@@ -30,11 +30,27 @@ import {
 
 type WebhookTesterPanelProps = {
   products: Product[];
+  initialProductId?: string;
 };
 
-export function WebhookTesterPanel({ products }: WebhookTesterPanelProps) {
+function resolveInitialProductId(
+  products: Product[],
+  candidate?: string
+): string {
+  if (candidate && products.some((product) => product.id === candidate)) {
+    return candidate;
+  }
+  return products[0]?.id ?? "";
+}
+
+export function WebhookTesterPanel({
+  products,
+  initialProductId,
+}: WebhookTesterPanelProps) {
   const [state, formAction, isPending] = useActionState(simulateWebhookAction, null);
-  const [productId, setProductId] = useState(products[0]?.id ?? "");
+  const [productId, setProductId] = useState(() =>
+    resolveInitialProductId(products, initialProductId)
+  );
   const [eventType, setEventType] = useState<WebhookEventType>("payment.completed");
 
   const selectedProduct = products.find((product) => product.id === productId);

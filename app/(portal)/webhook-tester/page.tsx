@@ -17,7 +17,14 @@ import { getWebhookTestLogs } from "@/lib/webhook-tests";
 import type { Product } from "@/types/product";
 import type { WebhookTestLog } from "@/types/webhook";
 
-export default async function WebhookTesterPage() {
+type WebhookTesterPageProps = {
+  searchParams: Promise<{ productId?: string }>;
+};
+
+export default async function WebhookTesterPage({
+  searchParams,
+}: WebhookTesterPageProps) {
+  const { productId: queryProductId } = await searchParams;
   let products: Product[] = [];
   let logs: WebhookTestLog[] = [];
   let loadError: string | null = null;
@@ -28,6 +35,11 @@ export default async function WebhookTesterPage() {
     loadError =
       error instanceof Error ? error.message : "An unexpected error occurred.";
   }
+
+  const initialProductId =
+    queryProductId && products.some((product) => product.id === queryProductId)
+      ? queryProductId
+      : products[0]?.id;
 
   return (
     <>
@@ -58,7 +70,10 @@ export default async function WebhookTesterPage() {
 
       {!loadError && products.length > 0 ? (
         <>
-          <WebhookTesterPanel products={products} />
+          <WebhookTesterPanel
+            products={products}
+            initialProductId={initialProductId}
+          />
           <WebhookTestHistory logs={logs} />
         </>
       ) : null}

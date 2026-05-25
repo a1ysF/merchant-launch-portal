@@ -23,7 +23,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
           onClick={onNavigate}
           className="flex items-center gap-2 font-semibold tracking-tight"
         >
-          <span className="flex size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+          <span className="flex size-8 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground shadow-sm shadow-sidebar-primary/20">
             <Rocket className="size-4" aria-hidden />
           </span>
           <span className="text-sm leading-tight">
@@ -44,7 +44,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
 
       <div className="border-t border-sidebar-border p-4">
         <p className="text-xs text-sidebar-foreground/60">
-          Portfolio demo — no auth or backend wired yet.
+          Merchant operations demo environment
         </p>
       </div>
     </aside>

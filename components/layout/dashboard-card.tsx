@@ -27,7 +27,12 @@ export function DashboardCard({
   className,
 }: DashboardCardProps) {
   return (
-    <Card className={cn(className)}>
+    <Card
+      className={cn(
+        "portal-surface portal-surface-hover border-border/50",
+        className
+      )}
+    >
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
         <div className="space-y-1">
           <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -38,8 +43,8 @@ export function DashboardCard({
           ) : null}
         </div>
         {Icon ? (
-          <span className="flex size-9 items-center justify-center rounded-lg bg-muted">
-            <Icon className="size-4 text-muted-foreground" aria-hidden />
+          <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
+            <Icon className="size-4 text-primary" aria-hidden />
           </span>
         ) : null}
       </CardHeader>
