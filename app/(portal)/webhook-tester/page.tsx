@@ -1,4 +1,9 @@
+import Link from "next/link";
+
 import { PageHeader } from "@/components/layout/page-header";
+import { ProductsLoadError } from "@/components/products/products-load-error";
+import { WebhookTestHistory } from "@/components/webhook/webhook-test-history";
+import { WebhookTesterPanel } from "@/components/webhook/webhook-tester-panel";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -7,17 +12,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { getProducts } from "@/lib/products";
+import { getWebhookTestLogs } from "@/lib/webhook-tests";
+import type { Product } from "@/types/product";
+import type { WebhookTestLog } from "@/types/webhook";
 
-export default function WebhookTesterPage() {
+export default async function WebhookTesterPage() {
+  let products: Product[] = [];
+  let logs: WebhookTestLog[] = [];
+  let loadError: string | null = null;
+
+  try {
+    [products, logs] = await Promise.all([getProducts(), getWebhookTestLogs()]);
+  } catch (error) {
+    loadError =
+      error instanceof Error ? error.message : "An unexpected error occurred.";
+  }
+
   return (
     <>
       <PageHeader
@@ -25,54 +36,32 @@ export default function WebhookTesterPage() {
         description="Simulate merchant integration callbacks before going live."
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {loadError ? (
+        <ProductsLoadError title="Could not load webhook tester" message={loadError} />
+      ) : null}
+
+      {!loadError && products.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Send test event</CardTitle>
+            <CardTitle>No products available</CardTitle>
             <CardDescription>
-              UI shell only — request execution will be added with the API layer.
+              Create a product in the catalog before running webhook simulations.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="event-type">Event type</Label>
-              <Select>
-                <SelectTrigger id="event-type" className="w-full">
-                  <SelectValue placeholder="Choose event" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="product.created">product.created</SelectItem>
-                  <SelectItem value="product.updated">product.updated</SelectItem>
-                  <SelectItem value="launch.completed">launch.completed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="payload">JSON payload</Label>
-              <Textarea
-                id="payload"
-                className="min-h-[200px] font-mono text-xs"
-                defaultValue={`{\n  "merchant_id": "demo-001",\n  "product_id": "prod_001",\n  "status": "live"\n}`}
-              />
-            </div>
-            <Button type="button" disabled>
-              Send test webhook
+          <CardContent>
+            <Button asChild>
+              <Link href="/products/new">Create product</Link>
             </Button>
           </CardContent>
         </Card>
+      ) : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Response</CardTitle>
-            <CardDescription>Last response will appear here.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <pre className="rounded-lg border border-border bg-muted/40 p-4 text-xs text-muted-foreground">
-              {`// Waiting for test run…\n{\n  "status": "idle"\n}`}
-            </pre>
-          </CardContent>
-        </Card>
-      </div>
+      {!loadError && products.length > 0 ? (
+        <>
+          <WebhookTesterPanel products={products} />
+          <WebhookTestHistory logs={logs} />
+        </>
+      ) : null}
     </>
   );
 }
