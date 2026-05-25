@@ -1,3 +1,7 @@
+import {
+  evaluateProductReadiness,
+  type GeneratedProductIssue,
+} from "@/lib/product-readiness";
 import { createClient } from "@/lib/supabase/server";
 import {
   PRODUCT_STATUSES,
@@ -7,6 +11,8 @@ import {
   type ProductStatus,
   type ProductType,
 } from "@/types/product";
+
+export { evaluateProductReadiness, calculateReadinessScoreFromIssues } from "@/lib/product-readiness";
 
 /** Row shape from the `products` table (snake_case). */
 export type DbProduct = {
@@ -31,6 +37,17 @@ export type DbProductIssue = {
   product_id: string;
   message: string;
   severity: string;
+  created_at?: string;
+};
+
+export type AuditLogEntry = {
+  id: string;
+  message: string;
+  severity: ProductIssue["severity"];
+  createdAt: string;
+  productId: string;
+  productTitle: string | null;
+  productSku: string | null;
 };
 
 function assertProductStatus(value: string): ProductStatus {
@@ -88,7 +105,11 @@ function queryError(action: string, message: string): Error {
   return new Error(`Failed to ${action}: ${message}`);
 }
 
-function formatPolicyError(message: string, operation: "insert" | "update"): string {
+function formatPolicyError(
+  message: string,
+  operation: "insert" | "update" | "delete",
+  table = "products"
+): string {
   const lower = message.toLowerCase();
   if (
     lower.includes("row-level security") ||
@@ -96,11 +117,8 @@ function formatPolicyError(message: string, operation: "insert" | "update"): str
     lower.includes("permission denied") ||
     lower.includes("42501")
   ) {
-    const policy =
-      operation === "insert"
-        ? "INSERT policy on the products table for anon"
-        : "UPDATE policy on the products table for anon";
-    return `${message} You may need a temporary ${policy} until authentication is added.`;
+    const verb = operation.toUpperCase();
+    return `${message} You may need a temporary ${verb} policy on the ${table} table for anon until authentication is added.`;
   }
   return message;
 }
@@ -147,16 +165,9 @@ export function parseProductFormData(formData: FormData): Record<string, string>
   };
 }
 
-export function calculateReadinessScore(input: {
-  webhookUrl?: string;
-  supportEmail?: string;
-  status: ProductStatus;
-}): number {
-  let score = 100;
-  if (!input.webhookUrl?.trim()) score -= 25;
-  if (!input.supportEmail?.trim()) score -= 25;
-  if (input.status === "draft") score -= 20;
-  return Math.max(0, score);
+/** @deprecated Use evaluateProductReadiness for score aligned with audit rules. */
+export function calculateReadinessScore(input: ProductFormInput): number {
+  return evaluateProductReadiness(input).readinessScore;
 }
 
 export function validateProductInput(
@@ -227,9 +238,10 @@ export function validateProductInput(
 /** @alias validateProductInput */
 export const validateCreateProductInput = validateProductInput;
 
-function mapProductInputToDb(input: ProductFormInput) {
-  const readinessScore = calculateReadinessScore(input);
-
+function mapProductInputToDb(
+  input: ProductFormInput,
+  readinessScore: number
+) {
   return {
     title: input.title,
     game_title: input.gameTitle,
@@ -245,9 +257,48 @@ function mapProductInputToDb(input: ProductFormInput) {
   };
 }
 
+async function replaceProductIssues(
+  productId: string,
+  issues: GeneratedProductIssue[]
+): Promise<void> {
+  const supabase = await createClient();
+
+  const { error: deleteError } = await supabase
+    .from("product_issues")
+    .delete()
+    .eq("product_id", productId);
+
+  if (deleteError) {
+    throw queryError(
+      "clear product issues",
+      formatPolicyError(deleteError.message, "delete", "product_issues")
+    );
+  }
+
+  if (issues.length === 0) {
+    return;
+  }
+
+  const rows = issues.map((issue) => ({
+    product_id: productId,
+    message: issue.message,
+    severity: issue.severity,
+  }));
+
+  const { error: insertError } = await supabase.from("product_issues").insert(rows);
+
+  if (insertError) {
+    throw queryError(
+      "save product issues",
+      formatPolicyError(insertError.message, "insert", "product_issues")
+    );
+  }
+}
+
 export async function createProduct(input: CreateProductInput): Promise<Product> {
   const supabase = await createClient();
-  const row = mapProductInputToDb(input);
+  const evaluation = evaluateProductReadiness(input);
+  const row = mapProductInputToDb(input, evaluation.readinessScore);
 
   const { data, error } = await supabase
     .from("products")
@@ -259,7 +310,17 @@ export async function createProduct(input: CreateProductInput): Promise<Product>
     throw queryError("create product", formatPolicyError(error.message, "insert"));
   }
 
-  return mapProductRow(data as DbProduct);
+  const productId = (data as DbProduct).id;
+
+  try {
+    await replaceProductIssues(productId, evaluation.issues);
+  } catch (issueError) {
+    await supabase.from("products").delete().eq("id", productId);
+    throw issueError;
+  }
+
+  const issues = await getProductIssues(productId);
+  return mapProductRow(data as DbProduct, issues);
 }
 
 export async function updateProduct(
@@ -267,7 +328,8 @@ export async function updateProduct(
   input: UpdateProductInput
 ): Promise<Product> {
   const supabase = await createClient();
-  const row = mapProductInputToDb(input);
+  const evaluation = evaluateProductReadiness(input);
+  const row = mapProductInputToDb(input, evaluation.readinessScore);
 
   const { data, error } = await supabase
     .from("products")
@@ -280,7 +342,19 @@ export async function updateProduct(
     throw queryError("update product", formatPolicyError(error.message, "update"));
   }
 
-  return mapProductRow(data as DbProduct);
+  try {
+    await replaceProductIssues(id, evaluation.issues);
+  } catch (issueError) {
+    throw queryError(
+      "sync product issues after update",
+      issueError instanceof Error
+        ? `${issueError.message} The product row was updated; re-save to retry issue sync.`
+        : "Issue sync failed after product update."
+    );
+  }
+
+  const issues = await getProductIssues(id);
+  return mapProductRow(data as DbProduct, issues);
 }
 
 export async function getProducts(): Promise<Product[]> {
@@ -323,13 +397,54 @@ export async function getProductIssues(productId: string): Promise<ProductIssue[
 
   const { data, error } = await supabase
     .from("product_issues")
-    .select("id, product_id, message, severity")
+    .select("id, product_id, message, severity, created_at")
     .eq("product_id", productId)
-    .order("id", { ascending: true });
+    .order("created_at", { ascending: true });
 
   if (error) {
     throw queryError("load product issues", error.message);
   }
 
   return (data as DbProductIssue[]).map(mapProductIssueRow);
+}
+
+type DbAuditIssueRow = DbProductIssue & {
+  created_at: string;
+  products: { title: string; sku: string } | { title: string; sku: string }[] | null;
+};
+
+export async function getAuditLogEntries(): Promise<AuditLogEntry[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("product_issues")
+    .select(
+      `
+      id,
+      message,
+      severity,
+      created_at,
+      product_id,
+      products ( title, sku )
+    `
+    )
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw queryError("load audit log", error.message);
+  }
+
+  return (data as DbAuditIssueRow[]).map((row) => {
+    const product = Array.isArray(row.products) ? row.products[0] : row.products;
+
+    return {
+      id: row.id,
+      message: row.message,
+      severity: assertIssueSeverity(row.severity),
+      createdAt: row.created_at,
+      productId: row.product_id,
+      productTitle: product?.title ?? null,
+      productSku: product?.sku ?? null,
+    };
+  });
 }

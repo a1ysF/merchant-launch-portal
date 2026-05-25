@@ -1,4 +1,8 @@
+import Link from "next/link";
+
 import { PageHeader } from "@/components/layout/page-header";
+import { ProductsLoadError } from "@/components/products/products-load-error";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -14,72 +18,102 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { getAuditLogEntries, type AuditLogEntry } from "@/lib/products";
+import type { ProductIssue } from "@/types/product";
 
-const demoEvents = [
-  {
-    id: "evt_001",
-    action: "product.updated",
-    actor: "demo.user@merchant.io",
-    resource: "prod_001",
-    time: "2026-05-24 09:12 UTC",
-  },
-  {
-    id: "evt_002",
-    action: "webhook.test",
-    actor: "system",
-    resource: "merchant demo-001",
-    time: "2026-05-24 08:45 UTC",
-  },
-  {
-    id: "evt_003",
-    action: "launch.approved",
-    actor: "ops.reviewer@merchant.io",
-    resource: "prod_003",
-    time: "2026-05-23 16:30 UTC",
-  },
-];
+function formatAuditTime(iso: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(iso));
+}
 
-export default function AuditLogPage() {
+function severityVariant(
+  severity: ProductIssue["severity"]
+): "destructive" | "outline" | "secondary" {
+  if (severity === "high") return "destructive";
+  if (severity === "medium") return "outline";
+  return "secondary";
+}
+
+export default async function AuditLogPage() {
+  let entries: AuditLogEntry[] = [];
+  let loadError: string | null = null;
+
+  try {
+    entries = await getAuditLogEntries();
+  } catch (error) {
+    loadError =
+      error instanceof Error ? error.message : "An unexpected error occurred.";
+  }
+
   return (
     <>
       <PageHeader
         title="Audit Log"
-        description="Immutable trail of configuration and launch changes."
+        description="Launch readiness findings generated from product setup rules."
       />
 
       <Card>
         <CardHeader>
-          <CardTitle>Activity</CardTitle>
+          <CardTitle>Readiness audit events</CardTitle>
           <CardDescription>
-            Sample events for layout — real log streaming comes with Supabase.
+            Live data from product_issues in Supabase, newest first.
           </CardDescription>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Time</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Actor</TableHead>
-                <TableHead>Resource</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {demoEvents.map((event) => (
-                <TableRow key={event.id}>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {event.time}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{event.action}</Badge>
-                  </TableCell>
-                  <TableCell>{event.actor}</TableCell>
-                  <TableCell className="font-mono text-xs">{event.resource}</TableCell>
+        <CardContent className="space-y-4 overflow-x-auto">
+          {loadError ? (
+            <ProductsLoadError title="Could not load audit log" message={loadError} />
+          ) : null}
+
+          {!loadError && entries.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No audit issues yet. Create or update a product to generate readiness findings.
+            </p>
+          ) : null}
+
+          {!loadError && entries.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Product</TableHead>
+                  <TableHead>Severity</TableHead>
+                  <TableHead>Message</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {entries.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatAuditTime(entry.createdAt)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <Link
+                          href={`/products/${entry.productId}`}
+                          className="font-medium hover:underline"
+                        >
+                          {entry.productTitle ?? "Unknown product"}
+                        </Link>
+                        {entry.productSku ? (
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {entry.productSku}
+                          </p>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={severityVariant(entry.severity)}>
+                        {entry.severity}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="max-w-md text-sm">{entry.message}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : null}
         </CardContent>
       </Card>
     </>
