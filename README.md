@@ -125,12 +125,12 @@ merchant-launch-portal/
 
 | Technology | Role | Why it was chosen |
 |------------|------|-------------------|
-| **Next.js (App Router)** | Framework, routing, SSR | Server components for secure data fetching; file-based routes; Vercel-native deployment |
+| **Next.js (App Router)** | Framework, routing, SSR | Server components for secure data fetching; file-based routes; Netlify OpenNext deployment |
 | **TypeScript** | Type safety | Shared domain types across UI, server actions, and data mappers |
 | **Tailwind CSS v4** | Styling | Utility-first layout; fast iteration on dashboard UI |
 | **shadcn/ui** | Component library | Accessible, customizable primitives (tables, forms, cards) without heavy abstraction |
 | **Supabase** | Database + API | PostgreSQL with RLS-ready schema; fast prototyping for portfolio/production path |
-| **Vercel** | Hosting | Zero-config Next.js deploys, preview URLs, edge-friendly |
+| **Netlify** | Hosting | Zero-config Next.js deploys (OpenNext), preview URLs per branch |
 
 **Supporting libraries:** `lucide-react` (icons), `@supabase/ssr` (cookie-aware server client), `class-variance-authority` + `tailwind-merge` (component variants).
 
@@ -270,11 +270,81 @@ The dashboard (`lib/dashboard-analytics.ts`) pulls live operational data:
 
 ## Live deployment
 
-<!-- Replace with your Vercel URL after deploy -->
+<!-- Replace with your Netlify URL after deploy (Site settings → Domain management) -->
 
-**Production URL:** `https://your-app.vercel.app`
+**Production URL:** `https://your-site-name.netlify.app`
 
-**Repository:** `https://github.com/your-username/merchant-launch-portal`
+**Repository:** `https://github.com/a1ysF/merchant-launch-portal`
+
+---
+
+## Deploy to Netlify (from Vercel)
+
+This app uses Next.js App Router, Server Components, and Server Actions. Netlify supports those via its built-in OpenNext adapter — you do **not** need a separate plugin in `package.json` unless you want to pin a version.
+
+### 1. Turn off Vercel (optional)
+
+In the [Vercel dashboard](https://vercel.com/dashboard), open your project → **Settings** → remove the Git integration or delete the project so you are not deploying twice.
+
+### 2. Connect the repo on Netlify
+
+1. Go to [app.netlify.com](https://app.netlify.com) and sign in (GitHub is easiest if your code is on GitHub).
+2. Click **Add new site** → **Import an existing project**.
+3. Choose **GitHub** and authorize Netlify if prompted.
+4. Select **`merchant-launch-portal`** (repo: `a1ysF/merchant-launch-portal`).
+
+### 3. Confirm build settings
+
+Netlify should auto-detect Next.js. Confirm these match `netlify.toml`:
+
+| Setting | Value |
+|---------|--------|
+| Build command | `npm run build` |
+| Publish directory | `.next` |
+| Node version | 20 (set in UI or via `NODE_VERSION` in `netlify.toml`) |
+
+If anything looks wrong, click **Show advanced** and set them manually.
+
+### 4. Add environment variables
+
+Before the first deploy finishes (or right after), open **Site configuration** → **Environment variables** and add:
+
+| Key | Value |
+|-----|--------|
+| `NEXT_PUBLIC_SUPABASE_URL` | From Supabase → Project Settings → API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same place (anon/public key) |
+
+Use the same values as your local `.env.local`. Apply to **Production** (and **Deploy previews** if you want previews to talk to Supabase).
+
+### 5. Deploy
+
+Click **Deploy site**. The first build usually takes a few minutes. When it succeeds, Netlify gives you a URL like `https://random-name.netlify.app`.
+
+- **Rename the site:** Site configuration → **General** → **Site details** → change site name.
+- **Custom domain:** Domain management → add your domain and follow DNS instructions.
+
+### 6. After deploy
+
+- Open the production URL and check `/dashboard`, product pages, and webhook tester.
+- Every `git push` to `main` triggers a new production deploy (default behavior).
+- Pull requests can get **Deploy previews** if that option is enabled on the site.
+
+### Local Netlify CLI (optional)
+
+```bash
+npm install -g netlify-cli
+netlify login
+netlify init    # link this folder to your Netlify site
+netlify dev     # local dev with Netlify env
+```
+
+### Troubleshooting
+
+| Problem | What to try |
+|---------|-------------|
+| Build fails on Netlify but works locally | Check build logs; ensure Node 20; run `npm run build` locally. |
+| Blank data / Supabase errors | Confirm env vars on Netlify match `.env.local`; redeploy after adding vars. |
+| Old Vercel URL still live | Remove or pause the Vercel project so traffic goes only to Netlify. |
 
 ---
 
