@@ -125,12 +125,12 @@ merchant-launch-portal/
 
 | Technology | Role | Why it was chosen |
 |------------|------|-------------------|
-| **Next.js (App Router)** | Framework, routing, SSR | Server components for secure data fetching; file-based routes; Netlify OpenNext deployment |
+| **Next.js (App Router)** | Framework, routing, SSR | Server components for secure data fetching; file-based routes; deployable on Vercel or Railway |
 | **TypeScript** | Type safety | Shared domain types across UI, server actions, and data mappers |
 | **Tailwind CSS v4** | Styling | Utility-first layout; fast iteration on dashboard UI |
 | **shadcn/ui** | Component library | Accessible, customizable primitives (tables, forms, cards) without heavy abstraction |
 | **Supabase** | Database + API | PostgreSQL with RLS-ready schema; fast prototyping for portfolio/production path |
-| **Netlify** | Hosting | Zero-config Next.js deploys (OpenNext), preview URLs per branch |
+| **Railway** | Hosting | Node.js service for Next.js SSR, Server Actions, and App Router |
 
 **Supporting libraries:** `lucide-react` (icons), `@supabase/ssr` (cookie-aware server client), `class-variance-authority` + `tailwind-merge` (component variants).
 
@@ -270,81 +270,57 @@ The dashboard (`lib/dashboard-analytics.ts`) pulls live operational data:
 
 ## Live deployment
 
-<!-- Replace with your Netlify URL after deploy (Site settings → Domain management) -->
+<!-- Replace with your Railway public URL after deploy -->
 
-**Production URL:** `https://your-site-name.netlify.app`
+**Production URL:** `https://your-service.up.railway.app`
 
 **Repository:** `https://github.com/a1ysF/merchant-launch-portal`
 
 ---
 
-## Deploy to Netlify (from Vercel)
+## Deploy to Railway
 
-This app uses Next.js App Router, Server Components, and Server Actions. Netlify supports those via its built-in OpenNext adapter — you do **not** need a separate plugin in `package.json` unless you want to pin a version.
+This app runs as a **Node.js web service** on Railway (not static hosting). Railway uses Railpack/Nixpacks to run `npm run build` then `npm start`. No Docker or `railway.toml` is required for this project.
 
-### 1. Turn off Vercel (optional)
-
-In the [Vercel dashboard](https://vercel.com/dashboard), open your project → **Settings** → remove the Git integration or delete the project so you are not deploying twice.
-
-### 2. Connect the repo on Netlify
-
-1. Go to [app.netlify.com](https://app.netlify.com) and sign in (GitHub is easiest if your code is on GitHub).
-2. Click **Add new site** → **Import an existing project**.
-3. Choose **GitHub** and authorize Netlify if prompted.
-4. Select **`merchant-launch-portal`** (repo: `a1ysF/merchant-launch-portal`).
-
-### 3. Confirm build settings
-
-Netlify should auto-detect Next.js. Confirm these match `netlify.toml`:
+### Railway service settings
 
 | Setting | Value |
 |---------|--------|
-| Build command | `npm run build` |
-| Publish directory | `.next` |
-| Node version | 20 (set in UI or via `NODE_VERSION` in `netlify.toml`) |
+| Service type | **Web service** (from GitHub repo) |
+| Build command | `npm run build` (auto-detected) |
+| Start command | `npm start` → `next start -H 0.0.0.0` |
+| Node version | **20+** (from `engines` in `package.json`) |
 
-If anything looks wrong, click **Show advanced** and set them manually.
+Railway injects a `PORT` environment variable; Next.js reads it automatically.
 
-### 4. Add environment variables
+### Environment variables
 
-Before the first deploy finishes (or right after), open **Site configuration** → **Environment variables** and add:
+Add these on the Railway service (**Variables** tab):
 
 | Key | Value |
 |-----|--------|
-| `NEXT_PUBLIC_SUPABASE_URL` | From Supabase → Project Settings → API |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same place (anon/public key) |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same page → anon public key |
 
-Use the same values as your local `.env.local`. Apply to **Production** (and **Deploy previews** if you want previews to talk to Supabase).
+No other env vars are required for the current app scope.
 
-### 5. Deploy
+### Deploy steps
 
-Click **Deploy site**. The first build usually takes a few minutes. When it succeeds, Netlify gives you a URL like `https://random-name.netlify.app`.
+1. Go to [railway.app](https://railway.app) and sign in with GitHub.
+2. **New Project** → **Deploy from GitHub repo** → select `merchant-launch-portal`.
+3. Add the two Supabase variables above before or right after the first deploy.
+4. Open the service → **Settings** → **Networking** → **Generate Domain** for a public URL.
+5. (Optional) Disconnect or delete the old Vercel project to avoid double deploys.
 
-- **Rename the site:** Site configuration → **General** → **Site details** → change site name.
-- **Custom domain:** Domain management → add your domain and follow DNS instructions.
+### Production verification
 
-### 6. After deploy
+After deploy, confirm:
 
-- Open the production URL and check `/dashboard`, product pages, and webhook tester.
-- Every `git push` to `main` triggers a new production deploy (default behavior).
-- Pull requests can get **Deploy previews** if that option is enabled on the site.
-
-### Local Netlify CLI (optional)
-
-```bash
-npm install -g netlify-cli
-netlify login
-netlify init    # link this folder to your Netlify site
-netlify dev     # local dev with Netlify env
-```
-
-### Troubleshooting
-
-| Problem | What to try |
-|---------|-------------|
-| Build fails on Netlify but works locally | Check build logs; ensure Node 20; run `npm run build` locally. |
-| Blank data / Supabase errors | Confirm env vars on Netlify match `.env.local`; redeploy after adding vars. |
-| Old Vercel URL still live | Remove or pause the Vercel project so traffic goes only to Netlify. |
+- `/dashboard` — KPIs and launch health load from Supabase
+- `/products` — catalog lists products
+- `/products/new` — create product (Server Action)
+- `/products/[id]` — dynamic route resolves
+- `/webhook-tester` — simulation + history persist
 
 ---
 
